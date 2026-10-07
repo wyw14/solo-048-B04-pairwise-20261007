@@ -34,6 +34,16 @@ func (r *ZoneRecovery) Begin(zoneID string) (network.Zone, error) {
 }
 
 func (r *ZoneRecovery) OnConnected(zoneID, stationID string) (network.Zone, error) {
+	if _, ok := r.state.Get(zoneID); !ok {
+		return network.Zone{}, fmt.Errorf("zone %s not found", zoneID)
+	}
+	binding, ok := r.registry.Binding(stationID)
+	if !ok {
+		return network.Zone{}, fmt.Errorf("station %s not found", stationID)
+	}
+	if binding.ZoneID != zoneID {
+		return network.Zone{}, fmt.Errorf("station %s is bound to zone %s, not zone %s", stationID, binding.ZoneID, zoneID)
+	}
 	r.mu.Lock()
 	if r.connected[zoneID] == nil {
 		r.connected[zoneID] = make(map[string]bool)

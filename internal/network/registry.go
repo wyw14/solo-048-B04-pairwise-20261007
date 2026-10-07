@@ -24,6 +24,13 @@ func NewRegistry(bindings []StationBinding) *Registry {
 	return r
 }
 
+func (r *Registry) Binding(stationID string) (StationBinding, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	binding, ok := r.bindings[stationID]
+	return binding, ok
+}
+
 func (r *Registry) ForZone(zoneID string) []StationBinding {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
