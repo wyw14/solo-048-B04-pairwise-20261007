@@ -1,10 +1,26 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"heatpulse/internal/recovery"
 )
+
+// recoveryErrorStatus classifies recovery validation errors: an unknown zone
+// is 404, while a cross-zone or unknown station is a 400 from the caller.
+func recoveryErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, recovery.ErrUnknownZone):
+		return http.StatusNotFound
+	case errors.Is(err, recovery.ErrForeignStation):
+		return http.StatusBadRequest
+	default:
+		return http.StatusConflict
+	}
+}
 
 func (a *App) reconnectStation(w http.ResponseWriter, r *http.Request) {
 	var input struct {
@@ -41,7 +57,7 @@ func (a *App) connectRecoveryStation(w http.ResponseWriter, r *http.Request) {
 	}
 	zone, err := a.ZoneRecovery.OnConnected(chi.URLParam(r, "zoneID"), input.StationID)
 	if err != nil {
-		writeError(w, http.StatusConflict, err)
+		writeError(w, recoveryErrorStatus(err), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"zone": zone, "readiness": a.ZoneRecovery.Readiness(zone.ID)})
@@ -60,6 +76,11 @@ func (a *App) recordRecoveryProofs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	zoneID := chi.URLParam(r, "zoneID")
+	if _, err := a.ZoneRecovery.ValidateStation(zoneID, input.StationID); err != nil {
+		writeError(w, recoveryErrorStatus(err), err)
+		return
+	}
 	warmup, err := a.Warmup.Proof(input.StationID, input.ExchangerID, input.Revision, input.Outlet)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
@@ -70,9 +91,9 @@ func (a *App) recordRecoveryProofs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
-	zone, err := a.ZoneRecovery.Evaluate(chi.URLParam(r, "zoneID"))
+	zone, err := a.ZoneRecovery.Evaluate(zoneID)
 	if err != nil {
-		writeError(w, http.StatusConflict, err)
+		writeError(w, recoveryErrorStatus(err), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"warmup": warmup, "pressure": pressure, "zone": zone})

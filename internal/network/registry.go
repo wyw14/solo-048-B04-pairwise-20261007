@@ -37,6 +37,16 @@ func (r *Registry) ForZone(zoneID string) []StationBinding {
 	return result
 }
 
+func (r *Registry) ZoneForStation(stationID string) (string, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	binding, ok := r.bindings[stationID]
+	if !ok {
+		return "", false
+	}
+	return binding.ZoneID, true
+}
+
 func (r *Registry) RequiredForZone(zoneID string) []string {
 	bindings := r.ForZone(zoneID)
 	ids := make([]string, 0, len(bindings))
